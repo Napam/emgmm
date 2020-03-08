@@ -159,6 +159,8 @@ class GMM:
             self.plot_result(axis=axis, show=False)
 
         movie = anime.FuncAnimation(self.fig, animate, frames=maxiter, interval=16, blit=False, repeat=False)
+        # movie = anime.FuncAnimation(self.fig, animate, frames=30, interval=128, blit=False, repeat=False)
+        # movie.save('GMM.gif', writer='PillowWriter')
         plt.show()
         self._plot_flag = False        
         return self
@@ -195,8 +197,8 @@ class GMM:
         from matplotlib.colors import to_rgb
         self._plot_flag = True
         self.colors = [
-            'lightpink','deepskyblue','orange', 'lime', 
-            'magenta','yellow','green','red','powderblue',
+            'magenta','deepskyblue','orange', 'lime', 
+            'lightpink','yellow','green','red','powderblue',
             'tomato', 'orange', 'deepskyblue', 'yellow', 'blue'
         ]
         self.colors = np.array([to_rgb(c) for c in self.colors[:self.k]])
@@ -304,12 +306,12 @@ class GMM:
         return -2*self.hood_history[-1]/self.N - penalty
 
 if __name__ == '__main__':
-    np.random.seed(42069)
+    np.random.seed(420)
     from sklearn.datasets import load_iris
     # data=load_iris()['data'][:,3].reshape(-1,1)
     data=load_iris()['data']
     
-    axis = [0,3]
+    axis = [2,3]
     k = 3
 
     JohnWick = GMM(k)

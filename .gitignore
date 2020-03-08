@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+mock.py
 
 # C extensions
 *.so

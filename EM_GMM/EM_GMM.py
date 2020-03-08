@@ -192,15 +192,17 @@ class GMM:
 
     def _init_plot(self, figsize) -> tuple:
         '''Initialize plot attributes'''
+        from matplotlib.colors import to_rgb
         self._plot_flag = True
-        # self.colors = ['tomato', 'orange', 'deepskyblue', 'yellow', 'red', 'blue']
         self.colors = [
             'lightpink','deepskyblue','orange', 'lime', 
             'magenta','yellow','green','red','powderblue',
             'tomato', 'orange', 'deepskyblue', 'yellow', 'blue'
         ]
+        self.colors = np.array([to_rgb(c) for c in self.colors[:self.k]])
         self.nc = len(self.colors)
         self.centroid_colors = [self.colors[i%self.nc] for i in range(len(self.components))]
+
         self.centroid_kwargs = dict(marker='h', s=200, c=self.centroid_colors, edgecolor='k')
         self.X_kwargs = dict(edgecolor='gray')
 
@@ -211,6 +213,36 @@ class GMM:
         self.right = self.fig.add_subplot(222)
         # Whole lower
         self.lower = self.fig.add_subplot(212)
+        self.blend = np.empty((self.N,3))
+    
+    def _plot_left(self, X, centroids, axis):
+        '''Method to plot upper left subplot (Ellipsis plot)'''
+        self.left.scatter(*X, **self.X_kwargs)
+        self.left.scatter(*centroids, **self.centroid_kwargs)
+
+        # Handle 1d case
+        if self.dim > 1:
+            for i, c in enumerate(self.components):
+                self._draw_ellipse(c['mean'][axis], c['cov'][axis], self.left, alpha=c['mix'], color=self.colors[i%self.nc])        
+        else:
+            xrange = np.linspace(X[0].min()-self.X_std, X[0].max()+self.X_std, 200)
+            for i, c in enumerate(self.components):    
+                self.left.plot(xrange, np.log(c['mix']*norm.pdf(xrange, c['mean'], c['cov'][0][0])+1.1), color=self.colors[i%self.nc])
+        self.left.set_title('GMM-Components')
+
+    def _plot_right(self, X, centroids):
+        '''Method to plot upper right subplot (Soft clustering)'''
+        self.right.scatter(*X, c=np.clip(self.weights@self.colors,0,1), **self.X_kwargs)
+        self.right.scatter(*centroids, **self.centroid_kwargs)
+        self.right.set_title('Soft clustering')
+    
+    def _plot_lower(self, X):
+        '''Method to plot lower subplot (Likelihood graph)'''
+        self.lower.grid()
+        # Drop first since it is usually really bad, and makes the plot ugly
+        self.lower.plot(np.arange(1,len(self.hood_history)), self.hood_history[1:])
+        self.lower.set_title('Log-Likelihood')
+        self.lower.set_xlabel('Iterations')
 
     def plot_result(self, figsize:tuple = (12,6), axis: list=[0,1], show=True) -> Union[None, 'Axes']:
         '''
@@ -229,33 +261,10 @@ class GMM:
             # Effectively give y-values (zeros) so I can plot them
             centroids = np.column_stack([self.components['mean'], np.zeros_like(self.components['mean'])]).T
             X = np.column_stack([self.X, np.zeros_like(self.X)]).T
-
-        # EM subplot
-        self.left.scatter(*X, **self.X_kwargs)
-        self.left.scatter(*centroids, **self.centroid_kwargs)
-
-        # Handle 1d case
-        if self.dim > 1:
-            for i, c in enumerate(self.components):
-                self._draw_ellipse(c['mean'][axis], c['cov'][axis], self.left, alpha=c['mix'], color=self.colors[i%self.nc])        
-        else:
-            xrange = np.linspace(X[0].min()-self.X_std, X[0].max()+self.X_std, 200)
-            for i, c in enumerate(self.components):    
-                self.left.plot(xrange, np.log(c['mix']*norm.pdf(xrange, c['mean'], c['cov'][0][0])+1.1), color=self.colors[i%self.nc])
-
-        self.left.set_title('GMM-Components')
-        # Categorized data point subplot (hard labels)
-        labels = self.get_labels()
-        self.right.scatter(*X, c=[self.colors[j%self.nc] for j in labels], **self.X_kwargs)
-        self.right.scatter(*centroids, **self.centroid_kwargs)
-        self.right.set_title('Hard clustering')
-
-        # Likelihood subplot
-        self.lower.grid()
-        # Drop first since it is usually really bad, and makes the plot ugly
-        self.lower.plot(np.arange(1,len(self.hood_history)), self.hood_history[1:])
-        self.lower.set_title('Log-Likelihood')
-        self.lower.set_xlabel('Iterations')
+        
+        self._plot_left(X,centroids, axis)    
+        self._plot_right(X,centroids)   
+        self._plot_lower(X)   
 
         plt.suptitle(f'Iteration {self.em_iterations}')
         
@@ -280,7 +289,6 @@ class GMM:
             for cj in self.components:
                 cum += ci['mix'] * cj['mix'] * mvn.pdf(x=ci['mean'], mean=cj['mean'], cov=ci['cov'] + cj['cov'])
         cum = cum - second_term
-
         return cum
 
     def get_bic(self) -> float:

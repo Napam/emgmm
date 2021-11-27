@@ -172,6 +172,8 @@ class GMM:
         )
         # movie = anime.FuncAnimation(self.fig, animate, frames=30, interval=128, blit=False, repeat=False)
         # movie.save('GMM.gif', writer='PillowWriter')
+        # movie = anime.FuncAnimation(self.fig, animate, frames=40, interval=128, blit=False, repeat=False)
+        # movie.save('GMM.mp4', writer='ffmpeg')
         plt.show()
         self._plot_flag = False
         return self

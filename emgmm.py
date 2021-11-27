@@ -8,6 +8,7 @@ from scipy.stats import multivariate_normal as mvn
 from scipy.stats import norm
 from typing import Union
 from matplotlib.patches import Ellipse
+from matplotlib import axes
 
 class GMM:
     """General use GMM algorithm with built in viz tools"""
@@ -155,12 +156,12 @@ class GMM:
         from matplotlib import animation as anime
 
         self._prepare_before_fit(X)
-        self._init_plot(figsize)
+        self._init_plot(figsize, axis)
 
         ALL = np.array([self.left, self.right, self.lower])
 
         def animate(i):
-            [ax.clear() for ax in ALL]
+            # [ax.clear() for ax in ALL]
             self._EM_iterate()
             if np.allclose(self.hood_history[-1], self.hood_history[-2], rtol=rtol, atol=atol):
                 movie.event_source.stop()
@@ -168,7 +169,7 @@ class GMM:
             self.plot_result(axis=axis, show=False)
 
         movie = anime.FuncAnimation(
-            self.fig, animate, frames=maxiter, interval=16, blit=False, repeat=False
+            self.fig, animate, frames=maxiter, interval=32, blit=False, repeat=False
         )
         # movie = anime.FuncAnimation(self.fig, animate, frames=30, interval=128, blit=False, repeat=False)
         # movie.save('GMM.gif', writer='PillowWriter')
@@ -201,7 +202,7 @@ class GMM:
                 Ellipse(xy=position, width=nsig * width, height=nsig * height, angle=angle, **kwargs)
             )
 
-    def _init_plot(self, figsize) -> tuple:
+    def _init_plot(self, figsize, axis) -> tuple:
         """Initialize plot attributes"""
         from matplotlib.colors import to_rgb
 
@@ -227,23 +228,33 @@ class GMM:
         self.centroid_colors = [self.colors[i % self.nc] for i in range(len(self.components))]
 
         self.centroid_kwargs = dict(marker="h", s=200, c=self.centroid_colors, edgecolor="k")
-        self.X_kwargs = dict(edgecolor="gray")
+        dummypoints = np.zeros(len(self.centroid_colors))
 
         self.fig = plt.figure(figsize=figsize)
         # Upper left
         self.left = self.fig.add_subplot(221)
+        self.left.set_title("GMM-Components")
+        self.left_scatter = self.left.scatter(*self.X[:,axis].T)
+        self.left_centroids = self.left.scatter(dummypoints, dummypoints, **self.centroid_kwargs)
         # Upper right
         self.right = self.fig.add_subplot(222)
+        self.right.set_title("Soft clustering")
+        self.right_scatter = self.right.scatter(*self.X[:,axis].T)
+        self.right_centroids = self.right.scatter(dummypoints, dummypoints, **self.centroid_kwargs, zorder=32)
         # Whole lower
         self.lower = self.fig.add_subplot(212)
-        self.blend = np.empty((self.N, 3))
+        self.lower.set_title("Log-Likelihood")
+        self.lower.set_xlabel("Iterations")
+        self.lower.grid()
+        self.lower_x = []
+        self.lower_plot = self.lower.plot(self.lower_x, self.hood_history[1:])[0]
 
-    def _plot_left(self, X, centroids, axis):
+    def _plot_left(self, X: np.ndarray, centroids: np.ndarray, axis: axes.Axes):
         """Method to plot upper left subplot (Ellipsis plot)"""
-        self.left.scatter(*X, **self.X_kwargs)
-        self.left.scatter(*centroids, **self.centroid_kwargs)
+        self.left_centroids.set_offsets(centroids.T)
 
         # Handle 1d case
+        self.left.patches.clear()
         if self.dim > 1:
             for i, c in enumerate(self.components):
                 self._draw_ellipse(
@@ -259,23 +270,22 @@ class GMM:
                 self.left.plot(
                     xrange,
                     np.log(c["mix"] * norm.pdf(xrange, c["mean"], c["cov"][0][0]) + 1.1),
-                    color=self.colors[i % self.nc],
+                    color=self.colors[i % self.nc]
                 )
-        self.left.set_title("GMM-Components")
 
     def _plot_right(self, X, centroids):
         """Method to plot upper right subplot (Soft clustering)"""
-        self.right.scatter(*X, c=np.clip(self.weights @ self.colors, 0, 1), **self.X_kwargs)
-        self.right.scatter(*centroids, **self.centroid_kwargs)
-        self.right.set_title("Soft clustering")
+        self.right_scatter.set_color(np.clip(self.weights @ self.colors, 0, 1))
+        self.right_centroids.set_offsets(centroids.T)
 
     def _plot_lower(self, X):
         """Method to plot lower subplot (Likelihood graph)"""
-        self.lower.grid()
-        # Drop first since it is usually really bad, and makes the plot ugly
-        self.lower.plot(np.arange(1, len(self.hood_history)), self.hood_history[1:])
-        self.lower.set_title("Log-Likelihood")
-        self.lower.set_xlabel("Iterations")
+        # if not self.lower_x: return
+        self.lower_x.append(self.em_iterations)
+        self.lower_plot.set_data(self.lower_x, self.hood_history[1:])
+        self.lower.relim()
+        self.lower.autoscale()
+        
 
     def plot_result(
         self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
@@ -353,10 +363,10 @@ if __name__ == "__main__":
     # data=load_iris()['data'][:,3].reshape(-1,1)
     data = load_iris()["data"]
 
-    axis = [2, 3]
+    axis = [2, 1]
     k = 3
 
-    JohnWick = GMM(k)
-    # JohnWick.fit(data)
-    JohnWick.fit_animate(data, axis=axis)
-    # JohnWick.plot_result(axis=[0,3])
+    gmm = GMM(k)
+    # gmm.fit(data)
+    gmm.fit_animate(data, axis=axis)
+    # gmm.plot_result(axis=[0,3])

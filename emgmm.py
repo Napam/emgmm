@@ -1,10 +1,13 @@
 """
 Written by Naphat Amundsen
 04/03/2020
+
+Visualization of expectation maximization algorithm using Gaussian mixture models.
+Implements a scikit-learn like api.
 """
 import numpy as np
 from scipy.stats import multivariate_normal as mvn
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 
 class GMM:
@@ -12,9 +15,8 @@ class GMM:
 
     def __init__(self, k: int = 3, init_covariance: Union[float, str] = "auto") -> None:
         """
-        k: number of gaussians
-
-        init_covarince: initial value for diagonal elements in covariance matrix. If
+        - k: number of gaussians
+        - init_covarince: initial value for diagonal elements in covariance matrix. If
                         'auto' is given as argument (default), the value will be the overall
                         variance of the data
         """
@@ -80,7 +82,7 @@ class GMM:
 
     def _E_step(self) -> None:
         """
-        E-step: Calculates the weights for each datapoint with
+        - E-step: Calculates the weights for each datapoint with
         respect to each component while assuming model parameters are correct
         """
         # c for component
@@ -96,8 +98,7 @@ class GMM:
 
     def _M_step(self) -> None:
         """
-        M-step: Updates the mean, covariance and priors of the
-        components.
+        - M-step: Updates the mean, covariance and priors of the components.
         """
         # C for component
         for i, c in enumerate(self.components):
@@ -130,10 +131,10 @@ class GMM:
         """
         Fit model to training data
 
-        X: training data
-        maxiter: maximum number of EM iterations
-        rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
-        atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
+        - X: training data
+        - maxiter: maximum number of EM iterations
+        - rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
+        - atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
         """
         self._prepare_before_fit(X)
 
@@ -155,14 +156,14 @@ class GMM:
         """
         Fit while visualizing
 
-        X: training data
-        maxiter: maximum number of EM iterations
-        rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
-        atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
-        figsize: size of figure
-        axis: which features to visualize
-        file: filename if you want to save to .gif or .mp4. E.g. 'video.mp4' or 'video.gif'
-        interval: wait interval in milliseconds between frames
+        - X: training data
+        - maxiter: maximum number of EM iterations
+        - rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
+        - atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
+        - figsize: size of figure
+        - axis: which features to visualize
+        - file: filename if you want to save to .gif or .mp4. E.g. 'video.mp4' or 'video.gif'
+        - interval: wait interval in milliseconds between frames
         """
         self._prepare_before_fit(X)
         plotter = self._get_plotter()
@@ -173,22 +174,22 @@ class GMM:
     def plot_result(
         self,
         figsize: Optional[Tuple[float, float]] = None,
-        axis: Optional[Tuple[int, int]] = None,
+        axis: Optional[List[int]] = None,
         show: bool = True,
     ) -> "matplotlib.figure":
         """
         Plots GMM result. If data is more that two axis', you can select
         which axis' to plot in axis parameter
 
-        figsize: passed on to plt.figure(figsize)
-        axis: which data columns to use
-        show: to do plt.show() or not
+        - figsize: passed on to plt.figure(figsize)
+        - axis: which data columns to use
+        - show: to do plt.show() or not
         """
         if figsize is None:
             figsize = (12, 6)
 
         if axis is None:
-            axis = (0, 1)
+            axis = [0, 1]
 
         assert len(axis) == 2, "Length of axis must be 2"
         plotter = self._get_plotter()
@@ -233,13 +234,19 @@ class GMM:
 
 if __name__ == "__main__":
     np.random.seed(420)
-
-    # data = np.loadtxt('iris.txt')[:, 3].reshape(-1, 1)
     data = np.loadtxt("iris.txt")
+    k = 3
 
-    axis = [2, 1]
-    gmm = GMM(k=3)
+    def example_fit_and_plot():
+        gmm = GMM(k=k)
+        gmm.fit(data)
+        gmm.plot_result(axis=[2, 1])
 
-    gmm.fit_animate(data, axis=axis, interval=64)
-    # gmm.fit(data)
-    # gmm.plot_result(axis=[1, 3])
+    def example_animate_1d():
+        data1d = data[:, 3].reshape(-1, 1)
+        gmm = GMM(k=k)
+        gmm.fit_animate(data1d, axis=[2, 1], interval=64)
+
+    def example_animate_2d():
+        gmm = GMM(k=k)
+        gmm.fit_animate(data, axis=[2, 1], interval=64)

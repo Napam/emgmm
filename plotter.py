@@ -45,7 +45,7 @@ class Plotter:
         rtol: float = 1e-8,
         atol: float = 1e-4,
         figsize: Optional[Tuple[int]] = None,
-        axis: Optional[Tuple[int]] = None,
+        axis: Optional[List[int]] = None,
         file: Optional[str] = None,
         interval: int = 32,
     ):
@@ -53,7 +53,7 @@ class Plotter:
             figsize = (12, 6)
 
         if axis is None:
-            axis = (0, 1)
+            axis = [0, 1]
 
         self._init_plot(self.gmm, figsize, axis)
 
@@ -65,7 +65,7 @@ class Plotter:
             ):
                 movie.event_source.stop()
                 print("Converged")
-            self.plot_result(axis=axis, show=False)
+            self.plot_result(figsize=figsize, axis=axis, show=False)
 
         movie = anime.FuncAnimation(
             self.fig, animate, frames=maxiter, interval=interval, blit=False, repeat=False

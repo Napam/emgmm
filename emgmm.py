@@ -13,15 +13,19 @@ from typing import List, Optional, Tuple, Union
 class GMM:
     """General use GMM algorithm with built in viz tools"""
 
-    def __init__(self, k: int = 3, init_covariance: Union[float, str] = "auto") -> None:
+    def __init__(
+        self, k: int = 3, init_covariance: Union[float, str] = "auto", seed: Optional[int] = None
+    ) -> None:
         """
         - k: number of gaussians
         - init_covarince: initial value for diagonal elements in covariance matrix. If
                         'auto' is given as argument (default), the value will be the overall
                         variance of the data
+        - seed: used when initializing stuff
         """
         self.k: int = k
         self.init_covariance: Union[float, str] = init_covariance
+        self.seed = seed
         self._plotter = None  # For plotter instance, if needed
 
     def _init_dtype(self, dim) -> None:
@@ -49,9 +53,9 @@ class GMM:
 
         # Pick random points as initial mean positions
         # Reshape to handle case for 1-dim data
-        self.components["mean"] = X[np.random.choice(range(self.N), self.k, replace=False)].reshape(
-            *self.components["mean"].shape
-        )
+        self.components["mean"] = X[
+            np.random.RandomState(self.seed).choice(range(self.N), self.k, replace=False)
+        ].reshape(*self.components["mean"].shape)
         # Initialize covariance matrices with scaled identity matrices
         self.components["cov"] = np.repeat(
             self.init_covariance * np.eye(self.dim)[np.newaxis, ...], self.k, axis=0
@@ -233,20 +237,28 @@ class GMM:
 
 
 if __name__ == "__main__":
-    np.random.seed(420)
     data = np.loadtxt("iris.txt")
     k = 3
 
     def example_fit_and_plot():
-        gmm = GMM(k=k)
+        gmm = GMM(k=k, seed=420)
         gmm.fit(data)
         gmm.plot_result(axis=[2, 1])
 
     def example_animate_1d():
         data1d = data[:, 3].reshape(-1, 1)
-        gmm = GMM(k=k)
+        gmm = GMM(k=k, seed=420)
         gmm.fit_animate(data1d, axis=[2, 1], interval=64)
 
     def example_animate_2d():
-        gmm = GMM(k=k)
+        gmm = GMM(k=k, seed=420)
         gmm.fit_animate(data, axis=[2, 1], interval=64)
+
+    def example_animate_to_file():
+        gmm = GMM(k=k, seed=420)
+        gmm.fit_animate(data, maxiter=30, axis=[2, 1], interval=64, file="gmm.gif")
+
+    # pip install meny and uncomment to get cli interface
+    # import meny
+
+    # meny.menu(locals())

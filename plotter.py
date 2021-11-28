@@ -83,7 +83,7 @@ class Plotter:
         else:
             plt.show()
 
-    def _init_plot(self, gmm, figsize, axis):
+    def _init_plot(self, gmm: GMM, figsize: Tuple[float, float], axis: Tuple[int, int]):
         """Initialize plot attributes"""
         from matplotlib.colors import to_rgb
 
@@ -127,7 +127,7 @@ class Plotter:
         self.lower_plot = self.lower.plot(self.iterations, self.gmm.hood_history[1:])[0]
 
     def plot_result(
-        self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
+        self, figsize: Tuple[float, float], axis: Tuple[int, int], show=True
     ) -> matplotlib.figure:
         """
         Plots GMM result. If data is more that two axis', you can select
@@ -158,7 +158,7 @@ class Plotter:
         return self.fig
 
     def _plot_left(self, X: np.ndarray, centroids: np.ndarray, axis: axes.Axes):
-        """Method to plot upper left subplot (Ellipsis plot)"""
+        """Plot upper left subplot (Ellipsis plot)"""
         self.left_centroids.set_offsets(centroids.T)
         if self.dim <= 1:
             self._plot_left_1d()
@@ -185,13 +185,13 @@ class Plotter:
                 color=self.colors[i % self.nc],
             )
 
-    def _plot_right(self, X, centroids):
-        """Method to plot upper right subplot (Soft clustering)"""
+    def _plot_right(self, X: np.ndarray, centroids: np.ndarray):
+        """Plot upper right subplot (Soft clustering)"""
         self.right_scatter.set_color(np.clip(self.gmm.weights @ self.colors, 0, 1))
         self.right_centroids.set_offsets(centroids.T)
 
     def _plot_lower(self, X):
-        """Method to plot lower subplot (Likelihood graph)"""
+        """Plot lower subplot (Likelihood graph)"""
         # if not self.lower_x: return
         self.lower_plot.set_data(self.iterations, self.gmm.hood_history[1:])
         self.lower.relim()

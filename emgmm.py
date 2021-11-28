@@ -6,9 +6,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal as mvn
 from scipy.stats import norm
-from typing import Callable, Union
-from matplotlib.patches import Ellipse
+from typing import Callable, Optional, Union
+
 from matplotlib import axes
+
 
 class GMM:
     """General use GMM algorithm with built in viz tools"""
@@ -23,7 +24,7 @@ class GMM:
         """
         self.k = k
         self.init_covariance = init_covariance
-        self._plot_flag = False
+        self._plotter = None
 
     def _init_dtype(self, dim) -> None:
         return np.dtype([("mean", float, (dim,)), ("cov", float, (dim, dim)), ("mix", float)])
@@ -71,7 +72,7 @@ class GMM:
         self.em_iterations = 0
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """ 'Returns log likelihoods for each data point"""
+        """'Returns log likelihoods for each data point"""
         hood = np.zeros(X.shape[0])
         for component in self.components:
             hood += component["mix"] * mvn.pdf(x=X, mean=component["mean"], cov=component["cov"])
@@ -141,158 +142,26 @@ class GMM:
                 break
         return self
 
+    def _get_plotter(self):
+        if self._plotter is None:
+            from plotter import Plotter
+            self._plotter = Plotter(self)
+            
+        return self._plotter
+
     def fit_animate(
         self,
         X,
-        maxiter: int = 64,
-        rtol: float = 1e-8,
-        atol: float = 1e-3,
-        figsize: tuple = (12, 6),
-        axis: list = [0, 1]
-    ) -> None:
+        **kwargs
+    ) -> 'GMM':
         """
         Fit while visualizing
         """
-        from matplotlib import animation as anime
-
         self._prepare_before_fit(X)
-        self._init_plot(figsize, axis)
+        plotter = self._get_plotter()
+        plotter.fit_animate(**kwargs)
 
-        def animate(i):
-            self._EM_iterate()
-            if np.allclose(self.hood_history[-1], self.hood_history[-2], rtol=rtol, atol=atol):
-                movie.event_source.stop()
-                print("Converged")
-            self.plot_result(axis=axis, show=False)
-
-        movie = anime.FuncAnimation(
-            self.fig, animate, frames=maxiter, interval=16, blit=False, repeat=False
-        )
-        
-        plt.show()
-        self._plot_flag = False
         return self
-
-    @staticmethod
-    def _draw_ellipse(position, covariance, ax, **kwargs):
-        """
-        Source:
-        https://jakevdp.github.io/PythonDataScienceHandbook/05.12-gaussian-mixtures.html
-
-        Draw an ellipse with a given position and covariance
-
-        Expects 2D covariance
-        """
-        # Convert covariance to principal axes
-        U, S, Vt = np.linalg.svd(covariance)
-        angle = np.degrees(np.arctan2(U[1, 0], U[0, 0]))
-        width, height = 2 * np.sqrt(S)
-
-        # Draw the Ellipse
-        # Multiple draws for one covariance to express contours
-        # print(1/np.linalg.norm(S))
-        for nsig in range(1, 4):
-            ax.add_patch(
-                Ellipse(xy=position, width=nsig * width, height=nsig * height, angle=angle, **kwargs)
-            )
-
-    def _init_plot(self, figsize, axis) -> tuple:
-        """Initialize plot attributes"""
-        from matplotlib.colors import to_rgb
-
-        self._plot_flag = True
-        self.colors = [
-            "magenta",
-            "deepskyblue",
-            "orange",
-            "lime",
-            "lightpink",
-            "yellow",
-            "green",
-            "red",
-            "powderblue",
-            "tomato",
-            "orange",
-            "deepskyblue",
-            "yellow",
-            "blue",
-        ]
-        self.colors = np.array([to_rgb(c) for c in self.colors[: self.k]])
-        self.nc = len(self.colors)
-        self.centroid_colors = [self.colors[i % self.nc] for i in range(len(self.components))]
-
-        self.centroid_kwargs = dict(marker="h", s=200, c=self.centroid_colors, edgecolor="k")
-        dummy = [np.zeros(len(self.centroid_colors))] * 2
-
-        # Handle 1d case
-        if self.dim > 1:
-            X = self.X[:, axis].T
-        elif self.dim == 1:
-            X = np.column_stack([self.X, np.zeros_like(self.X)]).T
-
-        self.fig = plt.figure(figsize=figsize)
-        # Upper left
-        self.left = self.fig.add_subplot(221)
-        self.left.set_title("GMM-Components")
-        self.left_scatter = self.left.scatter(*X)
-        self.left_centroids = self.left.scatter(*dummy, **self.centroid_kwargs, zorder=32)
-        if self.dim == 1:
-            self.xrange_leftplot = np.linspace(X[0].min() - self.X_std, X[0].max() + self.X_std, 512)
-            zeros = np.zeros_like(self.xrange_leftplot)
-            self.left_gs = [self.left.plot(self.xrange_leftplot, zeros, color=c)[0] for c in self.centroid_colors]
-        # Upper right
-        self.right = self.fig.add_subplot(222)
-        self.right.set_title("Soft clustering")
-        self.right_scatter = self.right.scatter(*X)
-        self.right_centroids = self.right.scatter(*dummy, **self.centroid_kwargs, zorder=32)
-        # Whole lower
-        self.lower = self.fig.add_subplot(212)
-        self.lower.set_title("Log-Likelihood")
-        self.lower.set_xlabel("Iterations")
-        self.lower.grid()
-        self.lower_x = []
-        self.lower_plot = self.lower.plot(self.lower_x, self.hood_history[1:])[0]
-
-    def _plot_left(self, X: np.ndarray, centroids: np.ndarray, axis: axes.Axes):
-        """Method to plot upper left subplot (Ellipsis plot)"""
-        self.left_centroids.set_offsets(centroids.T)
-        if self.dim <= 1:
-            self._plot_left_1d()
-        else:
-            self._plot_left_2d()
-    
-    def _plot_left_1d(self):
-        old_lim = self.left.get_ylim()
-        max_y = old_lim[1]
-        for left_plot, c in zip(self.left_gs, self.components):
-            pdf = np.log(c["mix"] * norm.pdf(self.xrange_leftplot, c["mean"], c["cov"][0][0]) + 1.1)
-            left_plot.set_ydata(pdf)
-            max_y = max(pdf.max(), max_y)
-        self.left.set_ylim([old_lim[0], max_y])
-
-    def _plot_left_2d(self):
-        self.left.patches.clear()
-        for i, c in enumerate(self.components):
-            self._draw_ellipse(
-                c["mean"][axis],
-                c["cov"][axis],
-                self.left,
-                alpha=c["mix"],
-                color=self.colors[i % self.nc],
-            )
-
-    def _plot_right(self, X, centroids):
-        """Method to plot upper right subplot (Soft clustering)"""
-        self.right_scatter.set_color(np.clip(self.weights @ self.colors, 0, 1))
-        self.right_centroids.set_offsets(centroids.T)
-
-    def _plot_lower(self, X):
-        """Method to plot lower subplot (Likelihood graph)"""
-        # if not self.lower_x: return
-        self.lower_x.append(self.em_iterations)
-        self.lower_plot.set_data(self.lower_x, self.hood_history[1:])
-        self.lower.relim()
-        self.lower.autoscale()
 
     def plot_result(
         self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
@@ -302,34 +171,13 @@ class GMM:
         which axis' to plot in axis parameter
         """
         assert len(axis) == 2, "Length of axis must be 2"
-        if self._plot_flag == False:
-            self._init_plot(figsize)
-
-        # Handle 1d case
-        if self.dim > 1:
-            centroids = self.components["mean"][:, axis].T
-            X = self.X[:, axis].T
-        elif self.dim == 1:
-            # Effectively give y-values (zeros) so I can plot them
-            centroids = np.column_stack(
-                [self.components["mean"], np.zeros_like(self.components["mean"])]
-            ).T
-            X = np.column_stack([self.X, np.zeros_like(self.X)]).T
-
-        self._plot_left(X, centroids, axis)
-        self._plot_right(X, centroids)
-        self._plot_lower(X)
-
-        plt.suptitle(f"Iteration {self.em_iterations}")
-
-        self.fig.tight_layout()
-        if show:
-            self.show()
+        plotter = self._get_plotter()
+        plotter._init_plot(self, figsize, axis)
+        plotter.plot_result(figsize, axis, show)
 
     def show(self):
         """Ensures that _plot_flag gets assigned correctly"""
-        self._plot_flag = False
-        plt.show()
+        self._get_plotter().show()
 
     def get_mise(self, validation_data: np.ndarray) -> float:
         """Approximation of mean integrated square error"""
@@ -365,15 +213,14 @@ class GMM:
 
 if __name__ == "__main__":
     np.random.seed(420)
-    from sklearn.datasets import load_iris
 
-    data=load_iris()['data'][:,3].reshape(-1,1)
-    # data = load_iris()["data"]
+    # data = np.loadtxt('iris.txt')[:, 3].reshape(-1, 1)
+    data = np.loadtxt('iris.txt')
 
     axis = [2, 1]
     k = 3
 
     gmm = GMM(k)
     # gmm.fit(data)
-    gmm.fit_animate(data, axis=axis)
+    gmm.fit_animate(data, axis=axis, interval=64)
     # gmm.plot_result(axis=[0,3])

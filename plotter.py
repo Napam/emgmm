@@ -1,6 +1,13 @@
-from typing import List, Optional, Tuple, Union
+"""
+Written by Naphat Amundsen
+2021/11/28T17:51:58
 
-from scipy.linalg.decomp import _make_complex_eigvecs
+See emmgmm.py for documentation
+"""
+
+from typing import List, Optional, Tuple
+import matplotlib
+
 from emgmm import GMM
 import numpy as np
 from matplotlib import animation as anime, axes
@@ -34,13 +41,13 @@ class Plotter:
 
     def fit_animate(
         self,
-        maxiter: int = 64,
+        maxiter: int = 128,
         rtol: float = 1e-8,
-        atol: float = 1e-3,
+        atol: float = 1e-4,
         figsize: Optional[Tuple[int]] = None,
         axis: Optional[Tuple[int]] = None,
         file: Optional[str] = None,
-        interval: int = 32
+        interval: int = 32,
     ):
         if figsize is None:
             figsize = (12, 6)
@@ -66,12 +73,13 @@ class Plotter:
 
         if file:
             import os
+
             _, extension = os.path.splitext(file)
-            assert extension in ['.gif', '.mp4'], "File must have extension .gif or .mp4"
-            if extension == '.gif':
+            assert extension in [".gif", ".mp4"], "File must have extension .gif or .mp4"
+            if extension == ".gif":
                 movie.save(file)
-            elif extension == '.mp4':
-                movie.save(file, writer='ffmpeg')
+            elif extension == ".mp4":
+                movie.save(file, writer="ffmpeg")
         else:
             plt.show()
 
@@ -120,7 +128,7 @@ class Plotter:
 
     def plot_result(
         self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
-    ) -> Union[None, axes.Axes]:
+    ) -> matplotlib.figure:
         """
         Plots GMM result. If data is more that two axis', you can select
         which axis' to plot in axis parameter
@@ -147,6 +155,7 @@ class Plotter:
         self.fig.tight_layout()
         if show:
             self.show()
+        return self.fig
 
     def _plot_left(self, X: np.ndarray, centroids: np.ndarray, axis: axes.Axes):
         """Method to plot upper left subplot (Ellipsis plot)"""
@@ -209,7 +218,6 @@ class Plotter:
 
         # Draw the Ellipse
         # Multiple draws for one covariance to express contours
-        # print(1/np.linalg.norm(S))
         for nsig in range(1, 4):
             ax.add_patch(
                 Ellipse(xy=position, width=nsig * width, height=nsig * height, angle=angle, **kwargs)

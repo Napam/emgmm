@@ -3,12 +3,8 @@ Written by Naphat Amundsen
 04/03/2020
 """
 import numpy as np
-from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal as mvn
-from scipy.stats import norm
-from typing import Callable, Optional, Union
-
-from matplotlib import axes
+from typing import Optional, Tuple, Union
 
 
 class GMM:
@@ -16,21 +12,21 @@ class GMM:
 
     def __init__(self, k: int = 3, init_covariance: Union[float, str] = "auto") -> None:
         """
-        k: number of centroids / components
+        k: number of gaussians
 
         init_covarince: initial value for diagonal elements in covariance matrix. If
                         'auto' is given as argument (default), the value will be the overall
                         variance of the data
         """
-        self.k = k
-        self.init_covariance = init_covariance
-        self._plotter = None
+        self.k: int = k
+        self.init_covariance: Union[float, str] = init_covariance
+        self._plotter = None  # For plotter instance, if needed
 
     def _init_dtype(self, dim) -> None:
         return np.dtype([("mean", float, (dim,)), ("cov", float, (dim, dim)), ("mix", float)])
 
     def __repr__(self):
-        return f"GMM(k={self.k})"
+        return f"GMM(k={self.k}, init_covariance={self.init_covariance})"
 
     def __str__(self):
         return f"GMM(k={self.k})"
@@ -72,7 +68,7 @@ class GMM:
         self.em_iterations = 0
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """'Returns log likelihoods for each data point"""
+        """Returns log likelihoods for each data point"""
         hood = np.zeros(X.shape[0])
         for component in self.components:
             hood += component["mix"] * mvn.pdf(x=X, mean=component["mean"], cov=component["cov"])
@@ -87,7 +83,7 @@ class GMM:
         E-step: Calculates the weights for each datapoint with
         respect to each component while assuming model parameters are correct
         """
-        # C for component
+        # c for component
         for i, c in enumerate(self.components):
             self.weights[:, i] = c["mix"] * mvn.pdf(x=self.X, mean=c["mean"], cov=c["cov"])
         w_axis_sum = self.weights.sum(axis=1)
@@ -130,9 +126,14 @@ class GMM:
         self._E_step()
         self.em_iterations += 1
 
-    def fit(self, X, maxiter: int = 420, rtol: float = 1e-8, atol: float = 1e-3) -> None:
+    def fit(self, X: np.ndarray, maxiter: int = 128, rtol: float = 1e-8, atol: float = 1e-4) -> None:
         """
-        Fit the thing
+        Fit model to training data
+
+        X: training data
+        maxiter: maximum number of EM iterations
+        rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
+        atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
         """
         self._prepare_before_fit(X)
 
@@ -145,17 +146,23 @@ class GMM:
     def _get_plotter(self):
         if self._plotter is None:
             from plotter import Plotter
-            self._plotter = Plotter(self)
-            
+
+            self._plotter: Plotter = Plotter(self)
+
         return self._plotter
 
-    def fit_animate(
-        self,
-        X,
-        **kwargs
-    ) -> 'GMM':
+    def fit_animate(self, X, **kwargs) -> "GMM":
         """
         Fit while visualizing
+
+        X: training data
+        maxiter: maximum number of EM iterations
+        rtol: ratio change limit between log likelihood of previous and current iteration (to determine convergence)
+        atol: difference limit between log likelihood of previous and current iteration (to determine convergence)
+        figsize: size of figure
+        axis: which features to visualize
+        file: filename if you want to save to .gif or .mp4. E.g. 'video.mp4' or 'video.gif'
+        interval: wait interval in milliseconds between frames
         """
         self._prepare_before_fit(X)
         plotter = self._get_plotter()
@@ -164,19 +171,32 @@ class GMM:
         return self
 
     def plot_result(
-        self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
-    ) -> Union[None, axes.Axes]:
+        self,
+        figsize: Optional[Tuple[float, float]] = None,
+        axis: Optional[Tuple[int, int]] = None,
+        show: bool = True,
+    ) -> "matplotlib.figure":
         """
         Plots GMM result. If data is more that two axis', you can select
         which axis' to plot in axis parameter
+
+        figsize: passed on to plt.figure(figsize)
+        axis: which data columns to use
+        show: to do plt.show() or not
         """
+        if figsize is None:
+            figsize = (12, 6)
+
+        if axis is None:
+            axis = (0, 1)
+
         assert len(axis) == 2, "Length of axis must be 2"
         plotter = self._get_plotter()
         plotter._init_plot(self, figsize, axis)
-        plotter.plot_result(figsize, axis, show)
+        return plotter.plot_result(figsize, axis, show)
 
-    def show(self):
-        """Ensures that _plot_flag gets assigned correctly"""
+    def show(self) -> None:
+        """Will work after plot_result"""
         self._get_plotter().show()
 
     def get_mise(self, validation_data: np.ndarray) -> float:
@@ -199,13 +219,13 @@ class GMM:
         return cum
 
     def get_bic(self) -> float:
-        """Returns BIC value"""
+        """Returns BIC value based on last log likelihood"""
         d = self.dim
         penalty = (self.k * (d + (d + 1) * d / 2) + (self.k - 1)) / 2 * np.log(self.N)
         return self.hood_history[-1] - penalty
 
     def get_aic(self) -> float:
-        """Returns AIC value"""
+        """Returns AIC value based on last log likelihood"""
         d = self.dim
         penalty = 2 * (self.k * (d + (d + 1) * d / 2) + (self.k - 1)) / self.N
         return -2 * self.hood_history[-1] / self.N - penalty
@@ -215,12 +235,11 @@ if __name__ == "__main__":
     np.random.seed(420)
 
     # data = np.loadtxt('iris.txt')[:, 3].reshape(-1, 1)
-    data = np.loadtxt('iris.txt')
+    data = np.loadtxt("iris.txt")
 
     axis = [2, 1]
-    k = 3
+    gmm = GMM(k=3)
 
-    gmm = GMM(k)
-    # gmm.fit(data)
     gmm.fit_animate(data, axis=axis, interval=64)
-    # gmm.plot_result(axis=[0,3])
+    # gmm.fit(data)
+    # gmm.plot_result(axis=[1, 3])

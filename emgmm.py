@@ -239,26 +239,27 @@ class GMM:
 if __name__ == "__main__":
     data = np.loadtxt("iris.txt")
     k = 3
+    seed = 420
 
     def example_fit_and_plot():
-        gmm = GMM(k=k, seed=420)
+        gmm = GMM(k=k, seed=seed)
         gmm.fit(data)
         gmm.plot_result(axis=[2, 1])
 
     def example_animate_1d():
         data1d = data[:, 3].reshape(-1, 1)
-        gmm = GMM(k=k, seed=420)
+        gmm = GMM(k=k, seed=seed)
         gmm.fit_animate(data1d, axis=[2, 1], interval=64)
 
     def example_animate_2d():
-        gmm = GMM(k=k, seed=420)
+        gmm = GMM(k=k, seed=seed)
         gmm.fit_animate(data, axis=[2, 1], interval=64)
 
     def example_animate_to_file():
-        gmm = GMM(k=k, seed=420)
+        gmm = GMM(k=k, seed=seed)
         gmm.fit_animate(data, maxiter=30, axis=[2, 1], interval=64, file="gmm.gif")
 
     # pip install meny and uncomment to get cli interface
     # import meny
 
-    # meny.menu(locals())
+    # meny.menu(locals(), "emgmm examples")

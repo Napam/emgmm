@@ -6,7 +6,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy.stats import multivariate_normal as mvn
 from scipy.stats import norm
-from typing import Union
+from typing import Callable, Union
 from matplotlib.patches import Ellipse
 from matplotlib import axes
 
@@ -26,7 +26,7 @@ class GMM:
         self._plot_flag = False
 
     def _init_dtype(self, dim) -> None:
-        return np.dtype([("mean", float, dim), ("cov", float, (dim, dim)), ("mix", float)])
+        return np.dtype([("mean", float, (dim,)), ("cov", float, (dim, dim)), ("mix", float)])
 
     def __repr__(self):
         return f"GMM(k={self.k})"
@@ -144,11 +144,11 @@ class GMM:
     def fit_animate(
         self,
         X,
-        maxiter: int = 420,
+        maxiter: int = 64,
         rtol: float = 1e-8,
         atol: float = 1e-3,
         figsize: tuple = (12, 6),
-        axis: list = [0, 1],
+        axis: list = [0, 1]
     ) -> None:
         """
         Fit while visualizing
@@ -158,10 +158,7 @@ class GMM:
         self._prepare_before_fit(X)
         self._init_plot(figsize, axis)
 
-        ALL = np.array([self.left, self.right, self.lower])
-
         def animate(i):
-            # [ax.clear() for ax in ALL]
             self._EM_iterate()
             if np.allclose(self.hood_history[-1], self.hood_history[-2], rtol=rtol, atol=atol):
                 movie.event_source.stop()
@@ -169,12 +166,9 @@ class GMM:
             self.plot_result(axis=axis, show=False)
 
         movie = anime.FuncAnimation(
-            self.fig, animate, frames=maxiter, interval=32, blit=False, repeat=False
+            self.fig, animate, frames=maxiter, interval=16, blit=False, repeat=False
         )
-        # movie = anime.FuncAnimation(self.fig, animate, frames=30, interval=128, blit=False, repeat=False)
-        # movie.save('GMM.gif', writer='PillowWriter')
-        # movie = anime.FuncAnimation(self.fig, animate, frames=40, interval=128, blit=False, repeat=False)
-        # movie.save('GMM.mp4', writer='ffmpeg')
+        
         plt.show()
         self._plot_flag = False
         return self
@@ -228,19 +222,29 @@ class GMM:
         self.centroid_colors = [self.colors[i % self.nc] for i in range(len(self.components))]
 
         self.centroid_kwargs = dict(marker="h", s=200, c=self.centroid_colors, edgecolor="k")
-        dummypoints = np.zeros(len(self.centroid_colors))
+        dummy = [np.zeros(len(self.centroid_colors))] * 2
+
+        # Handle 1d case
+        if self.dim > 1:
+            X = self.X[:, axis].T
+        elif self.dim == 1:
+            X = np.column_stack([self.X, np.zeros_like(self.X)]).T
 
         self.fig = plt.figure(figsize=figsize)
         # Upper left
         self.left = self.fig.add_subplot(221)
         self.left.set_title("GMM-Components")
-        self.left_scatter = self.left.scatter(*self.X[:,axis].T)
-        self.left_centroids = self.left.scatter(dummypoints, dummypoints, **self.centroid_kwargs)
+        self.left_scatter = self.left.scatter(*X)
+        self.left_centroids = self.left.scatter(*dummy, **self.centroid_kwargs, zorder=32)
+        if self.dim == 1:
+            self.xrange_leftplot = np.linspace(X[0].min() - self.X_std, X[0].max() + self.X_std, 512)
+            zeros = np.zeros_like(self.xrange_leftplot)
+            self.left_gs = [self.left.plot(self.xrange_leftplot, zeros, color=c)[0] for c in self.centroid_colors]
         # Upper right
         self.right = self.fig.add_subplot(222)
         self.right.set_title("Soft clustering")
-        self.right_scatter = self.right.scatter(*self.X[:,axis].T)
-        self.right_centroids = self.right.scatter(dummypoints, dummypoints, **self.centroid_kwargs, zorder=32)
+        self.right_scatter = self.right.scatter(*X)
+        self.right_centroids = self.right.scatter(*dummy, **self.centroid_kwargs, zorder=32)
         # Whole lower
         self.lower = self.fig.add_subplot(212)
         self.lower.set_title("Log-Likelihood")
@@ -252,26 +256,30 @@ class GMM:
     def _plot_left(self, X: np.ndarray, centroids: np.ndarray, axis: axes.Axes):
         """Method to plot upper left subplot (Ellipsis plot)"""
         self.left_centroids.set_offsets(centroids.T)
-
-        # Handle 1d case
-        self.left.patches.clear()
-        if self.dim > 1:
-            for i, c in enumerate(self.components):
-                self._draw_ellipse(
-                    c["mean"][axis],
-                    c["cov"][axis],
-                    self.left,
-                    alpha=c["mix"],
-                    color=self.colors[i % self.nc],
-                )
+        if self.dim <= 1:
+            self._plot_left_1d()
         else:
-            xrange = np.linspace(X[0].min() - self.X_std, X[0].max() + self.X_std, 200)
-            for i, c in enumerate(self.components):
-                self.left.plot(
-                    xrange,
-                    np.log(c["mix"] * norm.pdf(xrange, c["mean"], c["cov"][0][0]) + 1.1),
-                    color=self.colors[i % self.nc]
-                )
+            self._plot_left_2d()
+    
+    def _plot_left_1d(self):
+        old_lim = self.left.get_ylim()
+        max_y = old_lim[1]
+        for left_plot, c in zip(self.left_gs, self.components):
+            pdf = np.log(c["mix"] * norm.pdf(self.xrange_leftplot, c["mean"], c["cov"][0][0]) + 1.1)
+            left_plot.set_ydata(pdf)
+            max_y = max(pdf.max(), max_y)
+        self.left.set_ylim([old_lim[0], max_y])
+
+    def _plot_left_2d(self):
+        self.left.patches.clear()
+        for i, c in enumerate(self.components):
+            self._draw_ellipse(
+                c["mean"][axis],
+                c["cov"][axis],
+                self.left,
+                alpha=c["mix"],
+                color=self.colors[i % self.nc],
+            )
 
     def _plot_right(self, X, centroids):
         """Method to plot upper right subplot (Soft clustering)"""
@@ -285,11 +293,10 @@ class GMM:
         self.lower_plot.set_data(self.lower_x, self.hood_history[1:])
         self.lower.relim()
         self.lower.autoscale()
-        
 
     def plot_result(
         self, figsize: tuple = (12, 6), axis: list = [0, 1], show=True
-    ) -> Union[None, "Axes"]:
+    ) -> Union[None, axes.Axes]:
         """
         Plots GMM result. If data is more that two axis', you can select
         which axis' to plot in axis parameter
@@ -360,8 +367,8 @@ if __name__ == "__main__":
     np.random.seed(420)
     from sklearn.datasets import load_iris
 
-    # data=load_iris()['data'][:,3].reshape(-1,1)
-    data = load_iris()["data"]
+    data=load_iris()['data'][:,3].reshape(-1,1)
+    # data = load_iris()["data"]
 
     axis = [2, 1]
     k = 3
